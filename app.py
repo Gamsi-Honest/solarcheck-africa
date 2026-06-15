@@ -134,14 +134,21 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
 
         with st.spinner("🤖 SolarCheck AI is reading your panel specifications..."):
             try:
-                import urllib.request
-                import urllib.error
+                import anthropic
 
-                # Call Claude AI to read the specification label
-                payload = json.dumps({
-                    "model": "claude-sonnet-4-6",
-                    "max_tokens": 1000,
-                    "messages": [
+                # Load API key from Streamlit secrets
+                api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+                if not api_key:
+                    st.error("API key not configured. Add ANTHROPIC_API_KEY to Streamlit Secrets.")
+                    st.stop()
+
+                # Call Claude AI using official Anthropic library
+                client = anthropic.Anthropic(api_key=api_key)
+
+                message = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=1000,
+                    messages=[
                         {
                             "role": "user",
                             "content": [
@@ -175,25 +182,11 @@ Return ONLY the JSON. No explanation. No other text."""
                             ]
                         }
                     ]
-                }).encode("utf-8")
-
-                req = urllib.request.Request(
-                    "https://api.anthropic.com/v1/messages",
-                    data=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "anthropic-version": "2023-06-01"
-                    },
-                    method="POST"
                 )
 
-                with urllib.request.urlopen(req, timeout=30) as response:
-                    result = json.loads(response.read().decode("utf-8"))
-                    raw_text = result["content"][0]["text"].strip()
-
-                    # Clean any markdown formatting if present
-                    clean_text = re.sub(r"```json|```", "", raw_text).strip()
-                    specs = json.loads(clean_text)
+                raw_text = message.content[0].text.strip()
+                clean_text = re.sub(r"```json|```", "", raw_text).strip()
+                specs = json.loads(clean_text)
 
                 if "error" in specs:
                     st.error(f"⚠️ {specs['error']}. Please upload a clear photo of the panel's specification label.")
@@ -251,8 +244,10 @@ Return ONLY the JSON. No explanation. No other text."""
                     st.session_state["extracted"]["temperature"] = live_temp
                     st.session_state["extracted"]["irradiance"]  = live_irr
 
-            except urllib.error.URLError:
-                st.error("⚠️ Network error. Check your internet connection and try again.")
+            except anthropic.APIConnectionError:
+                st.error("⚠️ Network error connecting to AI service. Check your internet connection and try again.")
+            except anthropic.AuthenticationError:
+                st.error("⚠️ Invalid API key. Please check your ANTHROPIC_API_KEY in Streamlit Secrets.")
             except json.JSONDecodeError:
                 st.error("⚠️ Could not read the specification values. Please make sure the label is clearly visible and try again.")
             except Exception as e:
