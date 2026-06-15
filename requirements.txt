@@ -4,3 +4,4 @@ pandas
 scikit-learn
 Pillow
 anthropic
+google-generativeai

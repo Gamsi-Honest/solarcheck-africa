@@ -134,35 +134,21 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
 
         with st.spinner("🤖 SolarCheck AI is reading your panel specifications..."):
             try:
-                import anthropic
+                import google.generativeai as genai
+                from PIL import Image as PILImage
 
-                # Load API key from Streamlit secrets
-                api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
-                if not api_key:
-                    st.error("API key not configured. Add ANTHROPIC_API_KEY to Streamlit Secrets.")
+                # Load Gemini API key from Streamlit secrets
+                gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+                if not gemini_key:
+                    st.error("Gemini API key not configured. Add GEMINI_API_KEY to Streamlit Secrets.")
                     st.stop()
 
-                # Call Claude AI using official Anthropic library
-                client = anthropic.Anthropic(api_key=api_key)
+                # Configure Gemini
+                genai.configure(api_key=gemini_key)
+                gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 
-                message = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=1000,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": "image/jpeg",
-                                        "data": img_base64
-                                    }
-                                },
-                                {
-                                    "type": "text",
-                                    "text": """You are reading a solar panel specification label for SolarCheck Africa, a panel quality verification system used in Cameroonian markets.
+                # Prepare prompt
+                prompt = """You are reading a solar panel specification label for SolarCheck Africa, a panel quality verification system used in Cameroonian markets.
 
 Extract ONLY these electrical values from the label:
 - Pmax (Maximum Power in Watts)
@@ -178,13 +164,12 @@ Example: {"pmax": 100, "vmp": 22.8, "imp": 4.39, "voc": 27.36, "isc": 4.87, "eff
 If this is not a solar panel specification label, return: {"error": "Not a solar panel specification label"}
 
 Return ONLY the JSON. No explanation. No other text."""
-                                }
-                            ]
-                        }
-                    ]
-                )
 
-                raw_text = message.content[0].text.strip()
+                # Send image to Gemini
+                img_for_gemini = PILImage.open(io.BytesIO(img_buffer.getvalue()))
+                response = gemini_model.generate_content([prompt, img_for_gemini])
+
+                raw_text = response.text.strip()
                 clean_text = re.sub(r"```json|```", "", raw_text).strip()
                 specs = json.loads(clean_text)
 
@@ -244,20 +229,10 @@ Return ONLY the JSON. No explanation. No other text."""
                     st.session_state["extracted"]["temperature"] = live_temp
                     st.session_state["extracted"]["irradiance"]  = live_irr
 
-            except anthropic.AuthenticationError:
-                # Developer info — visible in Streamlit logs only
-                print("ERROR: Invalid API key or insufficient credits")
-                st.error("⚠️ Photo scan is temporarily unavailable. Please use Manual Entry below.")
-                st.info("💡 Tip: All panel values are printed on the specification label. Manual entry takes less than 1 minute.")
-            except anthropic.APIConnectionError:
-                print("ERROR: Could not connect to AI service")
-                st.warning("⚠️ No connection to scanning service. Please use Manual Entry instead.")
-                st.info("💡 Manual entry works offline — no internet needed.")
             except json.JSONDecodeError:
-                print("ERROR: AI response could not be parsed as JSON")
+                print("ERROR: Gemini response could not be parsed as JSON")
                 st.warning("⚠️ Could not read label clearly. Try a clearer photo or use Manual Entry.")
             except Exception as e:
-                # Log full error for developer, show friendly message to user
                 print(f"ERROR: {type(e).__name__}: {str(e)}")
                 st.warning("⚠️ Photo scan could not complete. Please use Manual Entry below.")
                 st.info("💡 Manual Entry works perfectly and gives the same AI verdict.")
