@@ -244,14 +244,14 @@ Return ONLY the JSON. No explanation. No other text."""
                     st.session_state["extracted"]["temperature"] = live_temp
                     st.session_state["extracted"]["irradiance"]  = live_irr
 
-            except anthropic.APIConnectionError:
-                st.error("⚠️ Network error connecting to AI service. Check your internet connection and try again.")
-            except anthropic.AuthenticationError:
-                st.error("⚠️ Invalid API key. Please check your ANTHROPIC_API_KEY in Streamlit Secrets.")
-            except json.JSONDecodeError:
-                st.error("⚠️ Could not read the specification values. Please make sure the label is clearly visible and try again.")
+            except anthropic.APIConnectionError as e:
+                st.error(f"⚠️ Network error: {str(e)}")
+            except anthropic.AuthenticationError as e:
+                st.error(f"⚠️ Authentication error — check your API key in Streamlit Secrets: {str(e)}")
+            except json.JSONDecodeError as e:
+                st.error(f"⚠️ Could not parse AI response as JSON: {str(e)}")
             except Exception as e:
-                st.error(f"⚠️ Could not process image. Please try manual entry instead.")
+                st.error(f"⚠️ Error details: {type(e).__name__}: {str(e)}")
 
 # ════════════════════════════════════════════════════════════════════════════
 # OPTION 2 — MANUAL ENTRY MODE
