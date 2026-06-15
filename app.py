@@ -119,6 +119,12 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
 
     if uploaded_image is not None:
         image = Image.open(uploaded_image)
+
+        # Convert to RGB — fixes crash when image is PNG with transparency (RGBA)
+        # JPEG does not support transparency, so we must convert first
+        if image.mode in ("RGBA", "P", "LA"):
+            image = image.convert("RGB")
+
         st.image(image, caption="Uploaded specification label", use_column_width=True)
 
         # Convert image to base64 to send to Claude AI for reading
