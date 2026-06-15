@@ -1,0 +1,40 @@
+{
+  "project": "SolarCheck Africa",
+  "version": "2.0",
+  "phase": "Phase 2 - Real Datasheet Anchored Model",
+  "model_type": "RandomForestClassifier",
+  "accuracy": 0.9938,
+  "features": [
+    "voltage",
+    "current",
+    "irradiance",
+    "temperature",
+    "efficiency",
+    "power_output",
+    "fill_factor",
+    "temp_corrected_efficiency"
+  ],
+  "categories": {
+    "0": "HEALTHY_PREMIUM",
+    "1": "HEALTHY_BASIC",
+    "2": "DEGRADED",
+    "3": "COUNTERFEIT"
+  },
+  "real_panels_used": [
+    "Bluesun BSM100M-36 100W",
+    "Suntech STP280 polycrystalline",
+    "Canadian Solar CS3W-450MS",
+    "CSI Solar CS6L-455MS",
+    "Jinko JKM550M"
+  ],
+  "new_features_vs_v1": [
+    "fill_factor",
+    "voc",
+    "isc",
+    "temp_corrected_efficiency"
+  ],
+  "training_samples": 1920,
+  "testing_samples": 480,
+  "founder": "Gamsi - Universite de Yaounde I",
+  "year": "2026"
+}
