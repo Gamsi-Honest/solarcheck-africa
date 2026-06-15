@@ -244,14 +244,23 @@ Return ONLY the JSON. No explanation. No other text."""
                     st.session_state["extracted"]["temperature"] = live_temp
                     st.session_state["extracted"]["irradiance"]  = live_irr
 
-            except anthropic.APIConnectionError as e:
-                st.error(f"⚠️ Network error: {str(e)}")
-            except anthropic.AuthenticationError as e:
-                st.error(f"⚠️ Authentication error — check your API key in Streamlit Secrets: {str(e)}")
-            except json.JSONDecodeError as e:
-                st.error(f"⚠️ Could not parse AI response as JSON: {str(e)}")
+            except anthropic.AuthenticationError:
+                # Developer info — visible in Streamlit logs only
+                print("ERROR: Invalid API key or insufficient credits")
+                st.error("⚠️ Photo scan is temporarily unavailable. Please use Manual Entry below.")
+                st.info("💡 Tip: All panel values are printed on the specification label. Manual entry takes less than 1 minute.")
+            except anthropic.APIConnectionError:
+                print("ERROR: Could not connect to AI service")
+                st.warning("⚠️ No connection to scanning service. Please use Manual Entry instead.")
+                st.info("💡 Manual entry works offline — no internet needed.")
+            except json.JSONDecodeError:
+                print("ERROR: AI response could not be parsed as JSON")
+                st.warning("⚠️ Could not read label clearly. Try a clearer photo or use Manual Entry.")
             except Exception as e:
-                st.error(f"⚠️ Error details: {type(e).__name__}: {str(e)}")
+                # Log full error for developer, show friendly message to user
+                print(f"ERROR: {type(e).__name__}: {str(e)}")
+                st.warning("⚠️ Photo scan could not complete. Please use Manual Entry below.")
+                st.info("💡 Manual Entry works perfectly and gives the same AI verdict.")
 
 # ════════════════════════════════════════════════════════════════════════════
 # OPTION 2 — MANUAL ENTRY MODE
