@@ -121,7 +121,6 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
         image = Image.open(uploaded_image)
 
         # Convert to RGB — fixes crash when image is PNG with transparency (RGBA)
-        # JPEG does not support transparency, so we must convert first
         if image.mode in ("RGBA", "P", "LA"):
             image = image.convert("RGB")
 
@@ -134,20 +133,16 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
 
         with st.spinner("🤖 SolarCheck AI is reading your panel specifications..."):
             try:
-                # ── NEW GEMINI SDK (google-genai) ──────────────────────────
                 from google import genai
                 from google.genai import types
 
-                # Load Gemini API key from Streamlit secrets
                 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
                 if not gemini_key:
                     st.error("Gemini API key not configured. Add GEMINI_API_KEY to Streamlit Secrets.")
                     st.stop()
 
-                # Create Gemini client using new SDK
                 client = genai.Client(api_key=gemini_key)
 
-                # Prepare the prompt
                 prompt = """You are reading a solar panel specification label for SolarCheck Africa, a panel quality verification system used in Cameroonian markets.
 
 Extract ONLY these electrical values from the label:
@@ -165,7 +160,6 @@ If this is not a solar panel specification label, return: {"error": "Not a solar
 
 Return ONLY the JSON. No explanation. No other text."""
 
-                # Send image + prompt to gemini-2.5-flash (vision-capable)
                 response = client.models.generate_content(
                     model="gemini-2.5-flash",
                     contents=[
@@ -177,7 +171,6 @@ Return ONLY the JSON. No explanation. No other text."""
                     ]
                 )
 
-                # Clean and parse the JSON response
                 raw_text = response.text.strip()
                 clean_text = re.sub(r"```json|```", "", raw_text).strip()
                 specs = json.loads(clean_text)
@@ -203,22 +196,22 @@ Return ONLY the JSON. No explanation. No other text."""
                         if value is not None:
                             col.metric(label, f"{value}")
                         else:
-                            col.metric(label, "Not found")
+                            col.metric(label, "Not found — estimated")
 
-                    # Store extracted values for use in prediction
+                    # Store extracted values — None means not found on label
                     extracted_values = {
-                        "voltage":     specs.get("vmp",        default_values["voltage"]),
-                        "current":     specs.get("imp",        default_values["current"]),
+                        "voltage":     specs.get("vmp"),
+                        "current":     specs.get("imp"),
                         "irradiance":  default_values["irradiance"],
                         "temperature": default_values["temperature"],
-                        "efficiency":  specs.get("efficiency", default_values["efficiency"]),
-                        "voc":         specs.get("voc",        default_values["voc"]),
-                        "isc":         specs.get("isc",        default_values["isc"])
+                        "efficiency":  specs.get("efficiency"),
+                        "voc":         specs.get("voc"),
+                        "isc":         specs.get("isc")
                     }
                     st.session_state["extracted"] = extracted_values
                     st.session_state["pmax_rated"] = specs.get("pmax", None)
 
-                    # Allow user to adjust temperature and irradiance for local conditions
+                    # Allow user to adjust temperature and irradiance
                     st.markdown("#### 🌤️ Adjust for Current Conditions in Yaoundé")
                     adj1, adj2 = st.columns(2)
                     with adj1:
@@ -242,9 +235,9 @@ Return ONLY the JSON. No explanation. No other text."""
                 st.warning("⚠️ Could not read label clearly. Try a clearer photo or use Manual Entry.")
             except Exception as e:
                 st.error(f"🔴 REAL ERROR: {type(e).__name__}: {str(e)}")
+
 # ════════════════════════════════════════════════════════════════════════════
 # OPTION 2 — MANUAL ENTRY MODE
-# Vendor types in the values from their measurements or the panel label
 # ════════════════════════════════════════════════════════════════════════════
 if "✏️ Enter Values Manually" in input_mode:
 
@@ -270,19 +263,37 @@ if "✏️ Enter Values Manually" in input_mode:
     }
     st.session_state["pmax_rated"] = None
 
-# ── CALCULATED VALUES ─────────────────────────────────────────────────────────
+# ── SMART CALCULATED VALUES ───────────────────────────────────────────────────
+# Works even when some values are missing from the panel label
+# Every African panel is different — we handle all of them
+# ─────────────────────────────────────────────────────────────────────────────
 if "extracted" in st.session_state and st.session_state["extracted"]:
-   # Smart handling — works even when some values are missing
-voltage    = vals["voltage"]    if vals.get("voltage")    else (vals.get("voc", 27.36) * 0.8)
-current    = vals["current"]    if vals.get("current")    else (vals.get("isc", 4.87)  * 0.9)
-voc        = vals["voc"]        if vals.get("voc")        else (voltage / 0.8)
-isc        = vals["isc"]        if vals.get("isc")        else (current / 0.9)
-efficiency = vals["efficiency"] if vals.get("efficiency") else 19.4
+    vals = st.session_state["extracted"]
 
-power_output              = voltage * current
-denom                     = voc * isc
-fill_factor               = power_output / denom if denom > 0 else 0
-temp_corrected_efficiency = efficiency * (1 - (0.35/100) * (vals.get("temperature", 29.0) - 25))
+    # Step 1 — Get voltage. Use Vmp if found. If not, estimate from Voc (80% rule)
+    voltage = vals["voltage"] if vals.get("voltage") else (vals.get("voc") or default_values["voc"]) * 0.8
+
+    # Step 2 — Get current. Use Imp if found. If not, estimate from Isc (90% rule)
+    current = vals["current"] if vals.get("current") else (vals.get("isc") or default_values["isc"]) * 0.9
+
+    # Step 3 — Get Voc. Use from label if found. If not, estimate from voltage
+    voc = vals["voc"] if vals.get("voc") else voltage / 0.8
+
+    # Step 4 — Get Isc. Use from label if found. If not, estimate from current
+    isc = vals["isc"] if vals.get("isc") else current / 0.9
+
+    # Step 5 — Get efficiency. Use from label if found. If not, use standard default
+    efficiency = vals["efficiency"] if vals.get("efficiency") else default_values["efficiency"]
+
+    # Step 6 — Get temperature and irradiance — always available
+    temperature = vals.get("temperature", default_values["temperature"])
+    irradiance  = vals.get("irradiance",  default_values["irradiance"])
+
+    # Step 7 — Calculate power, fill factor, and temperature-corrected efficiency
+    power_output              = voltage * current
+    denom                     = voc * isc
+    fill_factor               = power_output / denom if denom > 0 else 0
+    temp_corrected_efficiency = efficiency * (1 - (0.35 / 100) * (temperature - 25))
 
     st.markdown("---")
     st.markdown("### ⚡ Calculated Values")
@@ -313,11 +324,11 @@ temp_corrected_efficiency = efficiency * (1 - (0.35/100) * (vals.get("temperatur
 
     if check:
         features = np.array([[
-            vals["voltage"],
-            vals["current"],
-            vals["irradiance"],
-            vals["temperature"],
-            vals["efficiency"],
+            voltage,
+            current,
+            irradiance,
+            temperature,
+            efficiency,
             power_output,
             fill_factor,
             temp_corrected_efficiency
@@ -370,16 +381,16 @@ temp_corrected_efficiency = efficiency * (1 - (0.35/100) * (vals.get("temperatur
             "Parameter": ["Voltage (V)", "Current (A)", "Power (W)", "Efficiency (%)",
                           "Fill Factor", "Irradiance (W/m²)", "Temperature (°C)",
                           "Temp-Corrected Efficiency (%)"],
-            "Value":     [f"{vals['voltage']}", f"{vals['current']}",
-                          f"{power_output:.1f}", f"{vals['efficiency']}",
-                          f"{fill_factor:.3f}", f"{vals['irradiance']}",
-                          f"{vals['temperature']}", f"{temp_corrected_efficiency:.2f}"],
+            "Value":     [f"{voltage:.2f}", f"{current:.2f}",
+                          f"{power_output:.1f}", f"{efficiency:.1f}",
+                          f"{fill_factor:.3f}", f"{irradiance:.0f}",
+                          f"{temperature:.1f}", f"{temp_corrected_efficiency:.2f}"],
             "Status":    [
-                "✅" if vals["voltage"]    > 15   else "⚠️",
-                "✅" if vals["current"]    > 3    else "⚠️",
-                "✅" if power_output       > 50   else "⚠️",
-                "✅" if vals["efficiency"] > 12   else "⚠️",
-                "✅" if fill_factor        > 0.75 else ("⚠️" if fill_factor > 0.55 else "❌"),
+                "✅" if voltage     > 15   else "⚠️",
+                "✅" if current     > 3    else "⚠️",
+                "✅" if power_output > 50  else "⚠️",
+                "✅" if efficiency  > 12   else "⚠️",
+                "✅" if fill_factor > 0.75 else ("⚠️" if fill_factor > 0.55 else "❌"),
                 "✅", "✅",
                 "✅" if temp_corrected_efficiency > 10 else "⚠️"
             ]
