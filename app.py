@@ -95,7 +95,7 @@ extracted_values = {}
 # ════════════════════════════════════════════════════════════════════════════
 # OPTION 1 — PHOTO SCAN MODE
 # Vendor photographs the spec sticker on the back of the panel
-# Claude AI reads the image and extracts all electrical parameters
+# Gemini AI reads the image and extracts all electrical parameters
 # ════════════════════════════════════════════════════════════════════════════
 if "📸 Scan Specification Label (Photo)" in input_mode:
 
@@ -127,15 +127,16 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
 
         st.image(image, caption="Uploaded specification label", use_column_width=True)
 
-        # Convert image to base64 to send to Claude AI for reading
+        # Convert image to bytes to send to Gemini AI
         img_buffer = io.BytesIO()
         image.save(img_buffer, format="JPEG")
-        img_base64 = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
+        img_bytes = img_buffer.getvalue()
 
         with st.spinner("🤖 SolarCheck AI is reading your panel specifications..."):
             try:
-                import google.generativeai as genai
-                from PIL import Image as PILImage
+                # ── NEW GEMINI SDK (google-genai) ──────────────────────────
+                from google import genai
+                from google.genai import types
 
                 # Load Gemini API key from Streamlit secrets
                 gemini_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -143,11 +144,10 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
                     st.error("Gemini API key not configured. Add GEMINI_API_KEY to Streamlit Secrets.")
                     st.stop()
 
-                # Configure Gemini
-                genai.configure(api_key=gemini_key)
-                gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+                # Create Gemini client using new SDK
+                client = genai.Client(api_key=gemini_key)
 
-                # Prepare prompt
+                # Prepare the prompt
                 prompt = """You are reading a solar panel specification label for SolarCheck Africa, a panel quality verification system used in Cameroonian markets.
 
 Extract ONLY these electrical values from the label:
@@ -165,10 +165,19 @@ If this is not a solar panel specification label, return: {"error": "Not a solar
 
 Return ONLY the JSON. No explanation. No other text."""
 
-                # Send image to Gemini
-                img_for_gemini = PILImage.open(io.BytesIO(img_buffer.getvalue()))
-                response = gemini_model.generate_content([prompt, img_for_gemini])
+                # Send image + prompt to Gemini 2.0 Flash (vision-capable)
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=[
+                        types.Part.from_bytes(
+                            data=img_bytes,
+                            mime_type="image/jpeg"
+                        ),
+                        prompt
+                    ]
+                )
 
+                # Clean and parse the JSON response
                 raw_text = response.text.strip()
                 clean_text = re.sub(r"```json|```", "", raw_text).strip()
                 specs = json.loads(clean_text)
@@ -182,11 +191,11 @@ Return ONLY the JSON. No explanation. No other text."""
                     st.markdown("#### 📋 Values Extracted From Your Label:")
                     extracted_cols = st.columns(3)
                     fields = [
-                        ("Pmax (W)",    specs.get("pmax")),
-                        ("Vmp (V)",     specs.get("vmp")),
-                        ("Imp (A)",     specs.get("imp")),
-                        ("Voc (V)",     specs.get("voc")),
-                        ("Isc (A)",     specs.get("isc")),
+                        ("Pmax (W)",       specs.get("pmax")),
+                        ("Vmp (V)",        specs.get("vmp")),
+                        ("Imp (A)",        specs.get("imp")),
+                        ("Voc (V)",        specs.get("voc")),
+                        ("Isc (A)",        specs.get("isc")),
                         ("Efficiency (%)", specs.get("efficiency")),
                     ]
                     for idx, (label, value) in enumerate(fields):
@@ -198,13 +207,13 @@ Return ONLY the JSON. No explanation. No other text."""
 
                     # Store extracted values for use in prediction
                     extracted_values = {
-                        "voltage":    specs.get("vmp",        default_values["voltage"]),
-                        "current":    specs.get("imp",        default_values["current"]),
-                        "irradiance": default_values["irradiance"],
-                        "temperature":default_values["temperature"],
-                        "efficiency": specs.get("efficiency", default_values["efficiency"]),
-                        "voc":        specs.get("voc",        default_values["voc"]),
-                        "isc":        specs.get("isc",        default_values["isc"])
+                        "voltage":     specs.get("vmp",        default_values["voltage"]),
+                        "current":     specs.get("imp",        default_values["current"]),
+                        "irradiance":  default_values["irradiance"],
+                        "temperature": default_values["temperature"],
+                        "efficiency":  specs.get("efficiency", default_values["efficiency"]),
+                        "voc":         specs.get("voc",        default_values["voc"]),
+                        "isc":         specs.get("isc",        default_values["isc"])
                     }
                     st.session_state["extracted"] = extracted_values
                     st.session_state["pmax_rated"] = specs.get("pmax", None)
@@ -230,10 +239,8 @@ Return ONLY the JSON. No explanation. No other text."""
                     st.session_state["extracted"]["irradiance"]  = live_irr
 
             except json.JSONDecodeError:
-                print("ERROR: Gemini response could not be parsed as JSON")
                 st.warning("⚠️ Could not read label clearly. Try a clearer photo or use Manual Entry.")
             except Exception as e:
-                print(f"ERROR: {type(e).__name__}: {str(e)}")
                 st.warning("⚠️ Photo scan could not complete. Please use Manual Entry below.")
                 st.info("💡 Manual Entry works perfectly and gives the same AI verdict.")
 
@@ -249,14 +256,14 @@ if "✏️ Enter Values Manually" in input_mode:
 
     col1, col2 = st.columns(2)
     with col1:
-        voltage     = st.number_input("Voltage — Vmp (V)",       min_value=0.0, max_value=60.0,   value=22.8,  step=0.1)
-        current     = st.number_input("Current — Imp (A)",       min_value=0.0, max_value=20.0,   value=4.39,  step=0.01)
-        irradiance  = st.number_input("Irradiance (W/m²)",       min_value=0.0, max_value=1200.0, value=980.0, step=10.0)
+        voltage     = st.number_input("Voltage — Vmp (V)",              min_value=0.0, max_value=60.0,   value=22.8,  step=0.1)
+        current     = st.number_input("Current — Imp (A)",              min_value=0.0, max_value=20.0,   value=4.39,  step=0.01)
+        irradiance  = st.number_input("Irradiance (W/m²)",              min_value=0.0, max_value=1200.0, value=980.0, step=10.0)
     with col2:
-        temperature = st.number_input("Temperature (°C)",        min_value=0.0, max_value=50.0,   value=29.0,  step=0.5)
-        efficiency  = st.number_input("Panel Efficiency (%)",    min_value=0.0, max_value=30.0,   value=19.4,  step=0.1)
-        voc         = st.number_input("Open Circuit Voltage — Voc (V)", min_value=0.0, max_value=80.0, value=27.36, step=0.1)
-    isc = st.number_input("Short Circuit Current — Isc (A)", min_value=0.0, max_value=20.0, value=4.87, step=0.01)
+        temperature = st.number_input("Temperature (°C)",               min_value=0.0, max_value=50.0,   value=29.0,  step=0.5)
+        efficiency  = st.number_input("Panel Efficiency (%)",           min_value=0.0, max_value=30.0,   value=19.4,  step=0.1)
+        voc         = st.number_input("Open Circuit Voltage — Voc (V)", min_value=0.0, max_value=80.0,   value=27.36, step=0.1)
+    isc = st.number_input("Short Circuit Current — Isc (A)",            min_value=0.0, max_value=20.0,   value=4.87,  step=0.01)
 
     st.session_state["extracted"] = {
         "voltage": voltage, "current": current, "irradiance": irradiance,
@@ -269,17 +276,17 @@ if "✏️ Enter Values Manually" in input_mode:
 if "extracted" in st.session_state and st.session_state["extracted"]:
     vals = st.session_state["extracted"]
 
-    power_output             = vals["voltage"] * vals["current"]
-    denom                    = vals["voc"] * vals["isc"]
-    fill_factor              = power_output / denom if denom > 0 else 0
-    temp_corrected_efficiency= vals["efficiency"] * (1 - (0.35/100) * (vals["temperature"] - 25))
+    power_output              = vals["voltage"] * vals["current"]
+    denom                     = vals["voc"] * vals["isc"]
+    fill_factor               = power_output / denom if denom > 0 else 0
+    temp_corrected_efficiency = vals["efficiency"] * (1 - (0.35/100) * (vals["temperature"] - 25))
 
     st.markdown("---")
     st.markdown("### ⚡ Calculated Values")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Power Output (W)",         f"{power_output:.1f} W")
-    c2.metric("Fill Factor",              f"{fill_factor:.3f}")
-    c3.metric("Temp-Corrected Eff (%)",   f"{temp_corrected_efficiency:.2f} %")
+    c1.metric("Power Output (W)",       f"{power_output:.1f} W")
+    c2.metric("Fill Factor",            f"{fill_factor:.3f}")
+    c3.metric("Temp-Corrected Eff (%)", f"{temp_corrected_efficiency:.2f} %")
 
     # Fill Factor indicator
     if fill_factor >= 0.75:
