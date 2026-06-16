@@ -165,9 +165,9 @@ If this is not a solar panel specification label, return: {"error": "Not a solar
 
 Return ONLY the JSON. No explanation. No other text."""
 
-                # Send image + prompt to Gemini 2.0 Flash (vision-capable)
+                # Send image + prompt to gemini-1.5-flashh (vision-capable)
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash",
+                    model="gemini-1.5-flash",
                     contents=[
                         types.Part.from_bytes(
                             data=img_bytes,
