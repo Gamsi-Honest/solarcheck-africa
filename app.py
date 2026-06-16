@@ -240,10 +240,8 @@ Return ONLY the JSON. No explanation. No other text."""
 
             except json.JSONDecodeError:
                 st.warning("⚠️ Could not read label clearly. Try a clearer photo or use Manual Entry.")
-            except Exception as e:
-                st.warning("⚠️ Photo scan could not complete. Please use Manual Entry below.")
-                st.info("💡 Manual Entry works perfectly and gives the same AI verdict.")
-
+                except Exception as e:
+                st.error(f"🔴 REAL ERROR: {type(e).__name__}: {str(e)}")
 # ════════════════════════════════════════════════════════════════════════════
 # OPTION 2 — MANUAL ENTRY MODE
 # Vendor types in the values from their measurements or the panel label
