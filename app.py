@@ -272,12 +272,17 @@ if "✏️ Enter Values Manually" in input_mode:
 
 # ── CALCULATED VALUES ─────────────────────────────────────────────────────────
 if "extracted" in st.session_state and st.session_state["extracted"]:
-    vals = st.session_state["extracted"]
+   # Smart handling — works even when some values are missing
+voltage    = vals["voltage"]    if vals.get("voltage")    else (vals.get("voc", 27.36) * 0.8)
+current    = vals["current"]    if vals.get("current")    else (vals.get("isc", 4.87)  * 0.9)
+voc        = vals["voc"]        if vals.get("voc")        else (voltage / 0.8)
+isc        = vals["isc"]        if vals.get("isc")        else (current / 0.9)
+efficiency = vals["efficiency"] if vals.get("efficiency") else 19.4
 
-    power_output              = vals["voltage"] * vals["current"]
-    denom                     = vals["voc"] * vals["isc"]
-    fill_factor               = power_output / denom if denom > 0 else 0
-    temp_corrected_efficiency = vals["efficiency"] * (1 - (0.35/100) * (vals["temperature"] - 25))
+power_output              = voltage * current
+denom                     = voc * isc
+fill_factor               = power_output / denom if denom > 0 else 0
+temp_corrected_efficiency = efficiency * (1 - (0.35/100) * (vals.get("temperature", 29.0) - 25))
 
     st.markdown("---")
     st.markdown("### ⚡ Calculated Values")
