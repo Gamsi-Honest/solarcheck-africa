@@ -240,7 +240,7 @@ Return ONLY the JSON. No explanation. No other text."""
 
             except json.JSONDecodeError:
                 st.warning("⚠️ Could not read label clearly. Try a clearer photo or use Manual Entry.")
-                except Exception as e:
+            except Exception as e:
                 st.error(f"🔴 REAL ERROR: {type(e).__name__}: {str(e)}")
 # ════════════════════════════════════════════════════════════════════════════
 # OPTION 2 — MANUAL ENTRY MODE
