@@ -145,16 +145,24 @@ if "📸 Scan Specification Label (Photo)" in input_mode:
 
                 prompt = """You are reading a solar panel specification label for SolarCheck Africa, a panel quality verification system used in Cameroonian markets.
 
-Extract ONLY these electrical values from the label:
+STEP 1 — Extract these electrical values from the label text:
 - Pmax (Maximum Power in Watts)
 - Vmp (Optimum Operating Voltage in V)
 - Imp (Optimum Operating Current in A)
 - Voc (Open Circuit Voltage in V)
 - Isc (Short Circuit Current in A)
 - Efficiency (Module Efficiency in %)
+- Brand (manufacturer name printed on the label)
 
-Return ONLY a JSON object with these exact keys. Use null for any value not found.
-Example: {"pmax": 100, "vmp": 22.8, "imp": 4.39, "voc": 27.36, "isc": 4.87, "efficiency": 19.4}
+STEP 2 — Visually inspect the LABEL ITSELF (the sticker, not the panel) for signs of counterfeiting. Score each item honestly:
+- print_quality: 0-10, how sharp and clean the printed text looks (10 = crisp professional print, 0 = blurry, smudged, or pixelated)
+- font_consistency: 0-10, whether all text uses the same font, size, and alignment throughout (10 = fully consistent, 0 = mixed fonts/sizes that suggest tampering or relabeling)
+- certification_marks_visible: true if you can see CE, IEC, TUV, or ISO marks anywhere on the label, false if none are visible
+- red_flags: a short list of any specific suspicious details (example: "spelling error in brand name", "logo color looks slightly off", "no serial number printed")
+
+Return ONLY a JSON object with these exact keys. Use null for any electrical value not found.
+{"pmax": 100, "vmp": 22.8, "imp": 4.39, "voc": 27.36, "isc": 4.87, "efficiency": 19.4, "brand": "Bluesun",
+ "label_check": {"print_quality": 8, "font_consistency": 9, "certification_marks_visible": true, "red_flags": []}}
 
 If this is not a solar panel specification label, return: {"error": "Not a solar panel specification label"}
 
@@ -197,6 +205,46 @@ Return ONLY the JSON. No explanation. No other text."""
                             col.metric(label, f"{value}")
                         else:
                             col.metric(label, "Not found — estimated")
+
+                    # ── LABEL AUTHENTICITY CHECK ──────────────────────────────
+                    # Second, independent signal — checks the STICKER itself for
+                    # signs of counterfeiting (print quality, fonts, cert marks).
+                    # This runs alongside the electrical fill-factor test below,
+                    # not instead of it — two independent checks catch more fakes
+                    # than either one alone.
+                    st.markdown("---")
+                    st.markdown("#### 🔎 Label Authenticity Check")
+
+                    label_check      = specs.get("label_check", {})
+                    print_quality    = label_check.get("print_quality", 5)
+                    font_consistency = label_check.get("font_consistency", 5)
+                    cert_visible     = label_check.get("certification_marks_visible", False)
+                    red_flags        = label_check.get("red_flags", [])
+
+                    la1, la2 = st.columns(2)
+                    la1.metric("Print Quality",      f"{print_quality}/10")
+                    la2.metric("Font Consistency",   f"{font_consistency}/10")
+
+                    label_score = (print_quality + font_consistency) / 2
+                    if not cert_visible:
+                        label_score -= 1  # missing marks isn't proof of fake, but it's a flag
+
+                    if cert_visible:
+                        st.markdown("✅ Certification marks (CE/IEC/TUV) visible on label")
+                    else:
+                        st.markdown("⚠️ No certification marks visible — not proof of a fake on its own, but worth a closer look")
+
+                    if red_flags:
+                        st.markdown("**🚩 Red flags noticed on the label:**")
+                        for flag in red_flags:
+                            st.markdown(f"- {flag}")
+
+                    if label_score < 5:
+                        st.warning("⚠️ This label shows signs that may indicate a counterfeit sticker. Weigh this together with the electrical test result below — don't decide on the label alone.")
+                    elif label_score < 7:
+                        st.info("ℹ️ Label looks mostly fine, with a few minor inconsistencies. Cross-check with the electrical test below.")
+                    else:
+                        st.success("✅ Label print quality and consistency look genuine.")
 
                     # Store extracted values — None means not found on label
                     extracted_values = {
