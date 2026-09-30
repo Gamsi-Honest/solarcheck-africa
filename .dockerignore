@@ -1,0 +1,18 @@
+# Keep the build context small and free of anything secret or machine-specific.
+.git
+.gitignore
+.github
+.devcontainer
+.streamlit/secrets.toml
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+node_modules
+docs
+tests
+requirements-dev.txt
+*.md
+!README.md

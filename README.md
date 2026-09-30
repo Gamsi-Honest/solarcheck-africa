@@ -105,6 +105,11 @@ GEMINI_API_KEY = "your-key"
 
 The app runs fine without it — manual entry exercises exactly the same council.
 
+**Deploying it?** See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the three routes
+(local/Network-URL for phones in the market, Streamlit Community Cloud for a permanent
+public URL, and Docker/Render for anything else). A `Dockerfile` and a `render.yaml`
+blueprint are included and need no editing.
+
 ### Command line (registry / batch use)
 
 ```bash

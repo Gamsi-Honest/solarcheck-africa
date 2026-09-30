@@ -1,0 +1,23 @@
+# One-click permanent deployment on Render (free tier).
+#
+# Connect this repository at https://dashboard.render.com -> New -> Blueprint,
+# point it at this file, and set GEMINI_API_KEY in the dashboard when prompted.
+# The repository stays free of secrets.
+
+services:
+  - type: web
+    name: solarcheck-africa-gsi
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt          # closest Render region to Central/West Africa
+    healthCheckPath: /_stcore/health
+    autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY
+        # sync: false means "prompt me in the dashboard, never commit it".
+        # Without a key the app still runs; only photo scanning is disabled
+        # and it says so on screen.
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
