@@ -1,0 +1,24 @@
+# SolarCheck Africa — runtime configuration.
+# Bound to 0.0.0.0 so the app is reachable from a container or a proxied
+# preview host, not just from localhost.
+[server]
+address = "0.0.0.0"
+port = 8501
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 25
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#f39c12"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f7f9fa"
+textColor = "#2c3e50"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+toolbarMode = "minimal"
